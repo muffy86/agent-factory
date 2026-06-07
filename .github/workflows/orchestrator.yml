@@ -1,0 +1,129 @@
+name: Agent Factory Orchestrator
+
+on:
+  issues:
+    types: [opened, labeled]
+  repository_dispatch:
+    types: [build_request, agent_task]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'What should be built?'
+        required: true
+        type: string
+      agent:
+        description: 'Which agent?'
+        required: false
+        type: choice
+        options:
+          - kortix
+          - openhands
+          - sweep
+          - morph
+          - aider
+          - claude-code
+        default: kortix
+      target_repo:
+        description: 'Target repo'
+        required: false
+        type: string
+        default: 'muffy86/agent-factory'
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine agent
+        id: agent
+        run: |
+          # From issue label
+          if [ -n "${{ github.event.issue.number }}" ]; then
+            LABELS="${{ join(github.event.issue.labels.*.name, '|') }}"
+            case "$LABELS" in
+              *openhands-task*) echo "agent=openhands" >> $GITHUB_OUTPUT ;;
+              *sweep*) echo "agent=sweep" >> $GITHUB_OUTPUT ;;
+              *morph-edit*) echo "agent=morph" >> $GITHUB_OUTPUT ;;
+              *aider-task*) echo "agent=aider" >> $GITHUB_OUTPUT ;;
+              *claude-code*) echo "agent=claude-code" >> $GITHUB_OUTPUT ;;
+              *) echo "agent=kortix" >> $GITHUB_OUTPUT ;;
+            esac
+            echo "task=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+            echo "context=${{ github.event.issue.body }}" >> $GITHUB_OUTPUT
+            echo "source_repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+            echo "source_number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          else
+            # From dispatch
+            echo "agent=${{ github.event.client_payload.agent || inputs.agent || 'kortix' }}" >> $GITHUB_OUTPUT
+            echo "task=${{ github.event.client_payload.task || inputs.task }}" >> $GITHUB_OUTPUT
+            echo "context=${{ github.event.client_payload.context || '' }}" >> $GITHUB_OUTPUT
+            echo "source_repo=${{ github.event.client_payload.source_repo || github.repository }}" >> $GITHUB_OUTPUT
+            echo "source_number=${{ github.event.client_payload.source_number || '' }}" >> $GITHUB_OUTPUT
+            echo "target_repo=${{ github.event.client_payload.target_repo || inputs.target_repo }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Update state
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const state = {
+              ts: new Date().toISOString(),
+              agent: '${{ steps.agent.outputs.agent }}',
+              task: '${{ steps.agent.outputs.task }}',
+              context: '${{ steps.agent.outputs.context }}',
+              source_repo: '${{ steps.agent.outputs.source_repo }}',
+              source_number: '${{ steps.agent.outputs.source_number }}',
+              target_repo: '${{ steps.agent.outputs.target_repo }}' || '${{ steps.agent.outputs.source_repo }}',
+              status: 'dispatched',
+              run_id: context.runId
+            };
+            // Post a status comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt('${{ steps.agent.outputs.source_number || 1 }}') || 1,
+              body: ':robot: **Agent Factory: Dispatched to `' + state.agent + '`**\n\n' +
+                    '**Task:** ' + state.task + '\n\n' +
+                    '**Run:** https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + '\n\n' +
+                    '**Next:** the ' + state.agent + ' agent will pick this up and update the issue.'
+            }).catch(() => {});
+            console.log('State:', JSON.stringify(state, null, 2));
+      - name: Route to agent
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const agent = '${{ steps.agent.outputs.agent }}';
+            const task = '${{ steps.agent.outputs.task }}';
+            const sourceRepo = '${{ steps.agent.outputs.source_repo }}';
+            const targetRepo = '${{ steps.agent.outputs.target_repo }}' || sourceRepo;
+            // Dispatch to the right agent's workflow in the target repo
+            const [owner, repo] = targetRepo.split('/');
+            const eventMap = {
+              'kortix': 'kortix_task',
+              'openhands': 'openhands_task',
+              'sweep': 'sweep_task',
+              'morph': 'morph_task',
+              'aider': 'aider_task',
+              'claude-code': 'claude_code_task'
+            };
+            const eventType = eventMap[agent] || 'kortix_task';
+            try {
+              await github.rest.repos.createDispatchEvent({
+                owner, repo,
+                event_type: eventType,
+                client_payload: {
+                  task: task,
+                  context: '${{ steps.agent.outputs.context }}',
+                  from_agent: 'agent-factory',
+                  from_run_id: context.runId
+                }
+              });
+              core.notice(':white_check_mark: Dispatched ' + eventType + ' to ' + targetRepo);
+            } catch (e) {
+              core.warning(':warning: Could not dispatch to ' + targetRepo + ': ' + e.message);
+              core.notice('Agent routing is best-effort. The target repo needs an ' + eventType + ' workflow.');
+            }
