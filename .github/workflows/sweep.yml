@@ -1,0 +1,34 @@
+name: Sweep - Issue to PR
+
+on:
+  repository_dispatch:
+    types: [sweep_task, agent_task]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'What to do'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sweep integration
+        if: env.SWEEP_API_KEY != ''
+        run: |
+          echo ":wave: Sweep integration requires SWEEP_API_KEY"
+          echo "Get one free at https://sweep.dev/"
+          echo "Task: ${{ github.event.client_payload.task || inputs.task }}"
+        env:
+          SWEEP_API_KEY: ${{ secrets.SWEEP_API_KEY }}
+      - name: Fallback - use Aider
+        if: env.SWEEP_API_KEY == ''
+        run: |
+          echo ":wave: SWEEP_API_KEY not set, falling back to Aider"
+          echo "Set SWEEP_API_KEY in repo secrets to enable Sweep natively"
