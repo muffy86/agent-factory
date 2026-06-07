@@ -1,0 +1,35 @@
+name: Morph Apply - AI Code Edits
+
+on:
+  repository_dispatch:
+    types: [morph_task, agent_task]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'What code to change'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  morph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Morph Apply
+        if: env.MORPH_API_KEY != ''
+        uses: morph-llm/morph-github-actions@v1
+        with:
+          api_key: ${{ secrets.MORPH_API_KEY }}
+          instruction: ${{ github.event.client_payload.task || inputs.task }}
+          model: morph-llm/morph-v0
+        env:
+          MORPH_API_KEY: ${{ secrets.MORPH_API_KEY }}
+      - name: Fallback
+        if: env.MORPH_API_KEY == ''
+        run: |
+          echo ":wave: MORPH_API_KEY not set"
+          echo "Get one free at https://morphllm.com (200 edits/mo free)"
