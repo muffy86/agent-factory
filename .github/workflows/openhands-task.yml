@@ -1,0 +1,47 @@
+name: OpenHands - Autonomous Dev
+
+on:
+  repository_dispatch:
+    types: [openhands_task, agent_task]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'What to build (autonomous, multi-hour)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  openhands:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours max
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup OpenHands
+        if: env.OPENHANDS_API_KEY != ''
+        run: |
+          pip install openhands-ai
+          echo ":wave: OpenHands installed"
+        env:
+          OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+      - name: Run OpenHands
+        if: env.OPENHANDS_API_KEY != ''
+        env:
+          OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          TASK="${{ github.event.client_payload.task || inputs.task }}"
+          # OpenHands can run as a CLI agent
+          # See: https://github.com/All-Hands-AI/OpenHands
+          python -m openhands.core.main --task "$TASK" --max-iterations 100 || echo ":warning: OpenHands needs interactive setup. See https://github.com/All-Hands-AI/OpenHands"
+      - name: Fallback - use Kortix session
+        if: env.OPENHANDS_API_KEY == ''
+        run: |
+          echo ":wave: OPENHANDS_API_KEY not set."
+          echo "Get one at https://www.all-hands.dev/ (free cloud) or self-host"
+          echo "OR use the Kortix session for this task"
