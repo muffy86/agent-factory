@@ -1,0 +1,26 @@
+name: Agent State Sync
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update agent state
+        run: |
+          STATE='{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","agents":{},"builds":[]}'
+          # Add a static snapshot of all our agents
+          echo "$STATE" > /tmp/agent-state.json
+      - name: Commit to .agent-state
+        env:
+          GH_TOKEN: ${{ secrets.KORTIX_AGENT_TOKEN }}
+        run: |
+          # We can't push to .agent-state without write access
+          # This is a placeholder for when the GitHub App is installed
+          echo ":wave: State sync runs. Install GitHub App to enable persistence."
