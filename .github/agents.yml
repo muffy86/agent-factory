@@ -1,0 +1,45 @@
+# Agent routing config
+agents:
+  kortix-build:
+    label: kortix-build
+    description: Kortix handles this directly
+    default_for: [feature, bug, question, planning]
+  openhands-task:
+    label: openhands-task
+    description: OpenHands - full Linux VM, multi-hour autonomous dev
+    best_for: [long-running-tasks, full-stack-features, complex-refactors]
+    requires: [OPENHANDS_API_KEY or self-hosted endpoint]
+  sweep:
+    label: sweep
+    description: Sweep - GitHub-native issue-to-PR
+    best_for: [small-bug-fixes, doc-updates, test-additions]
+    requires: [SWEEP_API_KEY]
+  morph-edit:
+    label: morph-edit
+    description: Morph - AI code edits for fleet-wide refactors
+    best_for: [refactoring, mass-updates, code-transformation]
+    requires: [MORPH_API_KEY]
+  aider-task:
+    label: aider-task
+    description: Aider - chat-with-your-repo
+    best_for: [multi-file-changes, feature-implementation, test-writing]
+    requires: [ANTHROPIC_API_KEY or OPENAI_API_KEY]
+  copilot:
+    label: copilot
+    description: GitHub Copilot in PR comments
+    best_for: [review, small-fixes, suggestions]
+    trigger: "@copilot" in any PR comment
+  claude-code:
+    label: claude-code
+    description: Claude Code CLI agent
+    best_for: [complex-multi-file-refactors, autonomous-bug-fixes]
+    requires: [ANTHROPIC_API_KEY]
+
+# Default routing rules
+defaults:
+  short-bug-fix: kortix-build
+  multi-file-feature: openhands-task
+  doc-update: sweep
+  test-addition: aider-task
+  security-fix: kortix-build  # security goes through Kortix for review
+  fleet-refactor: morph-edit
