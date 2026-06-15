@@ -2,4 +2,4 @@ name: CI
 on: [push, pull_request]
 jobs:
   ci:
-    uses: muffy86/infra-automation/.github/workflows/ci-node.yml@main
+    uses: Muffy1/infra-automation/.github/workflows/ci-node.yml@main
