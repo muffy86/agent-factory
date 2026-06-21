@@ -18,7 +18,7 @@ jobs:
   morph:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Morph Apply
         if: env.MORPH_API_KEY != ''
         uses: morph-llm/morph-github-actions@v1
